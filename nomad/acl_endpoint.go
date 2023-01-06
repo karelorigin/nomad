@@ -2024,7 +2024,7 @@ func (a *ACL) OIDCAuthURL(args *structs.ACLOIDCAuthURLRequest, reply *structs.AC
 		return err
 	}
 	if authMethod == nil {
-		return structs.NewErrRPCCodedf(http.StatusNotFound, "auth-method %q not found", args.AuthMethodName)
+		return structs.NewErrRPCCodedf(http.StatusBadRequest, "auth-method %q not found", args.AuthMethodName)
 	}
 
 	// If the authentication method generates global ACL tokens, we need to
@@ -2115,7 +2115,7 @@ func (a *ACL) OIDCCompleteAuth(
 		return err
 	}
 	if authMethod == nil {
-		return structs.NewErrRPCCodedf(http.StatusNotFound, "auth-method %q not found", args.AuthMethodName)
+		return structs.NewErrRPCCodedf(http.StatusBadRequest, "auth-method %q not found", args.AuthMethodName)
 	}
 
 	// If the authentication method generates global ACL tokens, we need to

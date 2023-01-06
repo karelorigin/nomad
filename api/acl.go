@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -370,7 +369,7 @@ func (a *ACLAuthMethods) Get(authMethodName string, q *QueryOptions) (*ACLAuthMe
 	return &resp, qm, nil
 }
 
-// ACLOIDC is used to query the ACL auth-methods endpoints.
+// ACLOIDC is used to query the ACL OIDC endpoints.
 type ACLOIDC struct {
 	client *Client
 }
@@ -380,20 +379,8 @@ func (c *Client) ACLOIDC() *ACLOIDC {
 	return &ACLOIDC{client: c}
 }
 
-// GetAuthUrl
-func (a *ACLOIDC) GetAuthUrl(req *ACLOIDCAuthURLRequest, q *WriteOptions) (*ACLOIDCAuthURLResponse, *WriteMeta, error) {
-
-	// Validate the request object.
-	if req.AuthMethodName == "" {
-		return nil, nil, fmt.Errorf("missing method name")
-	}
-	if req.RedirectURI == "" {
-		return nil, nil, fmt.Errorf("missing redirect uri")
-	}
-	if req.ClientNonce == "" {
-		return nil, nil, fmt.Errorf("missing nonce")
-	}
-
+// GetAuthURL
+func (a *ACLOIDC) GetAuthURL(req *ACLOIDCAuthURLRequest, q *WriteOptions) (*ACLOIDCAuthURLResponse, *WriteMeta, error) {
 	var resp ACLOIDCAuthURLResponse
 	wm, err := a.client.write("/v1/acl/oidc/auth-url", req, &resp, q)
 	if err != nil {
@@ -404,18 +391,6 @@ func (a *ACLOIDC) GetAuthUrl(req *ACLOIDCAuthURLRequest, q *WriteOptions) (*ACLO
 
 // CompleteAuth
 func (a *ACLOIDC) CompleteAuth(req *ACLOIDCCompleteAuthRequest, q *WriteOptions) (*ACLToken, *WriteMeta, error) {
-	if req == nil || req.AuthMethodName == "" {
-		return nil, nil, fmt.Errorf("missing method name")
-	}
-
-	if req == nil || req.RedirectURI == "" {
-		return nil, nil, fmt.Errorf("missing redirect uri")
-	}
-
-	if req == nil || req.ClientNonce == "" {
-		return nil, nil, fmt.Errorf("missing nonce")
-	}
-
 	var resp ACLToken
 	wm, err := a.client.write("/v1/acl/oidc/complete-auth", req, &resp, q)
 	if err != nil {

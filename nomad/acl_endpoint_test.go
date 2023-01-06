@@ -3,15 +3,18 @@ package nomad
 import (
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	capOIDC "github.com/hashicorp/cap/oidc"
 	"github.com/hashicorp/go-memdb"
 	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 	"github.com/hashicorp/nomad/ci"
 	"github.com/hashicorp/nomad/helper/uuid"
+	"github.com/hashicorp/nomad/lib/auth/oidc"
 	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/testutil"
@@ -3042,4 +3045,168 @@ func TestACLEndpoint_UpsertACLAuthMethods(t *testing.T) {
 	must.Nil(t, err)
 	must.NotNil(t, out)
 	must.True(t, am1.Equal(resp.AuthMethods[0]))
+}
+
+func TestACL_OIDCAuthURL(t *testing.T) {
+	t.Parallel()
+
+	testServer, _, testServerCleanupFn := TestACLServer(t, nil)
+	defer testServerCleanupFn()
+	codec := rpcClient(t, testServer)
+	testutil.WaitForLeader(t, testServer.RPC)
+
+	// Set up the test OIDC provider.
+	oidcTestProvider := capOIDC.StartTestProvider(t)
+	defer oidcTestProvider.Stop()
+	oidcTestProvider.SetClientCreds("bob", "topsecretcredthing")
+
+	// Send an empty request to ensure the RPC handler runs the validation
+	// func.
+	authURLReq1 := structs.ACLOIDCAuthURLRequest{
+		WriteRequest: structs.WriteRequest{
+			Region: DefaultRegion,
+		},
+	}
+
+	var authURLResp1 structs.ACLOIDCAuthURLResponse
+	err := msgpackrpc.CallWithCodec(codec, structs.ACLOIDCAuthURLRPCMethod, &authURLReq1, &authURLResp1)
+	must.Error(t, err)
+	must.StrContains(t, err.Error(), "400")
+	must.StrContains(t, err.Error(), "invalid OIDC auth-url request")
+
+	// Send a valid request that contains an auth method name that does not
+	// exist within state.
+	authURLReq2 := structs.ACLOIDCAuthURLRequest{
+		AuthMethodName: "test-oidc-auth-method",
+		RedirectURI:    "http://127.0.0.1:4649/oidc/callback",
+		ClientNonce:    "fsSPuaodKevKfDU3IeXa",
+		WriteRequest: structs.WriteRequest{
+			Region: DefaultRegion,
+		},
+	}
+
+	var authURLResp2 structs.ACLOIDCAuthURLResponse
+	err = msgpackrpc.CallWithCodec(codec, structs.ACLOIDCAuthURLRPCMethod, &authURLReq2, &authURLResp2)
+	must.Error(t, err)
+	must.StrContains(t, err.Error(), "400")
+	must.StrContains(t, err.Error(), "auth-method \"test-oidc-auth-method\" not found")
+
+	// Generate and upsert an ACL auth method for use. Certain values must be
+	// taken from the cap OIDC provider just like real world use.
+	mockedAuthMethod := mock.ACLAuthMethod()
+	mockedAuthMethod.Config.AllowedRedirectURIs = []string{"http://127.0.0.1:4649/oidc/callback"}
+	mockedAuthMethod.Config.OIDCDiscoveryURL = oidcTestProvider.Addr()
+	mockedAuthMethod.Config.SigningAlgs = []string{"ES256"}
+	mockedAuthMethod.Config.DiscoveryCaPem = []string{oidcTestProvider.CACert()}
+
+	must.NoError(t, testServer.fsm.State().UpsertACLAuthMethods(10, []*structs.ACLAuthMethod{mockedAuthMethod}))
+
+	// Make a new request, which contains all valid data and therefore should
+	// succeed.
+	authURLReq3 := structs.ACLOIDCAuthURLRequest{
+		AuthMethodName: mockedAuthMethod.Name,
+		RedirectURI:    mockedAuthMethod.Config.AllowedRedirectURIs[0],
+		ClientNonce:    "fsSPuaodKevKfDU3IeXa",
+		WriteRequest: structs.WriteRequest{
+			Region: DefaultRegion,
+		},
+	}
+
+	var authURLResp3 structs.ACLOIDCAuthURLResponse
+	err = msgpackrpc.CallWithCodec(codec, structs.ACLOIDCAuthURLRPCMethod, &authURLReq3, &authURLResp3)
+	must.NoError(t, err)
+
+	// The response URL comes encoded, so decode this and check we have each
+	// component we expect.
+	escapedURL, err := url.PathUnescape(authURLResp3.AuthURL)
+	must.NoError(t, err)
+	must.StrContains(t, escapedURL, "/authorize?client_id=mock")
+	must.StrContains(t, escapedURL, "&nonce=fsSPuaodKevKfDU3IeXa")
+	must.StrContains(t, escapedURL, "&redirect_uri=http://127.0.0.1:4649/oidc/callback")
+	must.StrContains(t, escapedURL, "&response_type=code")
+	must.StrContains(t, escapedURL, "&scope=openid")
+	must.StrContains(t, escapedURL, "&state=st_")
+}
+
+func TestACL_OIDCCompleteAuth(t *testing.T) {
+	t.Parallel()
+
+	testServer, _, testServerCleanupFn := TestACLServer(t, nil)
+	defer testServerCleanupFn()
+	codec := rpcClient(t, testServer)
+	testutil.WaitForLeader(t, testServer.RPC)
+
+	// Set up the OIDC provider cache and the test provider.
+	testServer.staticEndpoints.ACL.oidcProviderCache = oidc.NewProviderCache()
+
+	oidcTestProvider := capOIDC.StartTestProvider(t)
+	defer oidcTestProvider.Stop()
+	oidcTestProvider.SetAllowedRedirectURIs([]string{"http://127.0.0.1:4649/oidc/callback"})
+
+	// Send an empty request to ensure the RPC handler runs the validation
+	// func.
+	completeAuthReq1 := structs.ACLOIDCCompleteAuthRequest{
+		WriteRequest: structs.WriteRequest{
+			Region: DefaultRegion,
+		},
+	}
+
+	var completeAuthResp1 structs.ACLOIDCCompleteAuthResponse
+	err := msgpackrpc.CallWithCodec(codec, structs.ACLOIDCCompleteAuthRPCMethod, &completeAuthReq1, &completeAuthResp1)
+	must.Error(t, err)
+	must.StrContains(t, err.Error(), "400")
+	must.StrContains(t, err.Error(), "invalid OIDC complete-auth request")
+
+	// Send a request that passes initial validation. The auth method does not
+	// exist meaning it will fail.
+	completeAuthReq2 := structs.ACLOIDCCompleteAuthRequest{
+		AuthMethodName: "test-oidc-auth-method",
+		ClientNonce:    "fsSPuaodKevKfDU3IeXa",
+		State:          "st_",
+		Code:           "idontknowthisyet",
+		RedirectURI:    "http://127.0.0.1:4649/oidc/callback",
+		WriteRequest: structs.WriteRequest{
+			Region: DefaultRegion,
+		},
+	}
+
+	var completeAuthResp2 structs.ACLOIDCCompleteAuthResponse
+	err = msgpackrpc.CallWithCodec(codec, structs.ACLOIDCCompleteAuthRPCMethod, &completeAuthReq2, &completeAuthResp2)
+	must.Error(t, err)
+	must.StrContains(t, err.Error(), "400")
+	must.StrContains(t, err.Error(), "auth-method \"test-oidc-auth-method\" not found")
+
+	// Generate and upsert an ACL auth method for use. Certain values must be
+	// taken from the cap OIDC provider and these are validated.
+	mockedAuthMethod := mock.ACLAuthMethod()
+	mockedAuthMethod.Config.BoundAudiences = []string{"mock"}
+	mockedAuthMethod.Config.AllowedRedirectURIs = []string{"http://127.0.0.1:4649/oidc/callback"}
+	mockedAuthMethod.Config.OIDCDiscoveryURL = oidcTestProvider.Addr()
+	mockedAuthMethod.Config.SigningAlgs = []string{"ES256"}
+	mockedAuthMethod.Config.DiscoveryCaPem = []string{oidcTestProvider.CACert()}
+
+	must.NoError(t, testServer.fsm.State().UpsertACLAuthMethods(10, []*structs.ACLAuthMethod{mockedAuthMethod}))
+
+	// Set our custom data and some expected values, so we can make the RPC and
+	// use the test provider.
+	oidcTestProvider.SetExpectedAuthNonce("fsSPuaodKevKfDU3IeXa")
+	oidcTestProvider.SetExpectedAuthCode("codeABC")
+	oidcTestProvider.SetCustomAudience("mock")
+	oidcTestProvider.SetExpectedState("st_someweirdstateid")
+	oidcTestProvider.SetCustomClaims(map[string]interface{}{"azp": "mock"})
+
+	completeAuthReq3 := structs.ACLOIDCCompleteAuthRequest{
+		AuthMethodName: mockedAuthMethod.Name,
+		ClientNonce:    "fsSPuaodKevKfDU3IeXa",
+		State:          "st_someweirdstateid",
+		Code:           "codeABC",
+		RedirectURI:    "http://127.0.0.1:4649/oidc/callback",
+		WriteRequest: structs.WriteRequest{
+			Region: DefaultRegion,
+		},
+	}
+
+	var completeAuthResp3 structs.ACLOIDCCompleteAuthResponse
+	err = msgpackrpc.CallWithCodec(codec, structs.ACLOIDCCompleteAuthRPCMethod, &completeAuthReq3, &completeAuthResp3)
+	must.NoError(t, err)
 }

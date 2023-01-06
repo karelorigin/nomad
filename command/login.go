@@ -191,7 +191,7 @@ func (l *LoginCommand) loginOIDC(ctx context.Context, client *api.Client) (*api.
 		ClientNonce:    callbackServer.Nonce(),
 	}
 
-	getAuthURLResp, _, err := client.ACLOIDC().GetAuthUrl(&getAuthArgs, nil)
+	getAuthURLResp, _, err := client.ACLOIDC().GetAuthURL(&getAuthArgs, nil)
 	if err != nil {
 		return nil, err
 	}

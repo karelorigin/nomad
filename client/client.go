@@ -783,6 +783,35 @@ func (c *Client) UpdateConfig(cb func(*config.Config)) *config.Config {
 	return newConfig
 }
 
+// UpdateNode allows mutating just the Node portion of the client
+// configuration. The updated Node is returned.
+//
+// This is similar to UpdateConfig but avoids deep copying the entier Config
+// struct when only the Node is updated.
+func (c *Client) UpdateNode(cb func(*structs.Node)) *structs.Node {
+	c.configLock.Lock()
+	defer c.configLock.Unlock()
+
+	//TODO(schmichael): is this necessary?
+	// Client synchronizes all access to c.config but not to any config
+	// fields, so we must make a shallow copy of the config to mutate
+	// config.Node.
+	newConfig := *c.config
+
+	// Create a new Node for updating as the shallow copy's Node may have
+	// concurrent readers
+	newNode := newConfig.Copy()
+
+	// newNode is now a fresh unshared copy, mutate away!
+	cb(newNode)
+
+	// Copy back the mutated structs
+	newConfig.Node = newNode
+	c.config = &newConfig
+
+	return newNode
+}
+
 // Datacenter returns the datacenter for the given client
 func (c *Client) Datacenter() string {
 	return c.GetConfig().Node.Datacenter

@@ -1,0 +1,119 @@
+---
+layout: api
+page_title: ACL OIDC - HTTP API
+description: The /acl/oidc endpoints are used to login via an OIDC provider.
+---
+
+# ACL OIDC HTTP API
+
+The `/acl/oidc` endpoints are used to manage login via an OIDC provider.
+
+## Get an OIDC authentication URL
+
+This endpoint creates a URL which is used to navigate and login to an OIDC
+provider.
+
+| Method | Path                    | Produces           |
+| ------ | ----------------------- | ------------------ |
+| `POST` | `/v1/acl/oidc/auth-url` | `application/json` |
+
+The table below shows this endpoint's support for
+[blocking queries](/api-docs#blocking-queries) and
+[required ACLs](/api-docs#acls).
+
+| Blocking Queries | ACL Required |
+| ---------------- | ------------ |
+| `NO`             | `none`       |
+
+### Parameters
+
+- `AuthMethodName` `(string: <required>)` - The name of the ACL authentication
+  method to use.
+
+- `RedirectURI` `(string: <required>)` - The URL that authorization should
+  redirect to.
+
+- `ClientNonce` `(string: <required>)` - A randomly generated string to prevent
+  replay attacks.
+
+### Sample Payload
+
+```json
+{
+  "AuthMethodName": "auth0",
+  "RedirectURI": "http://127.0.0.1:4649/oidc/callback",
+  "ClientNonce": "fpSPuaodKevKfDU3IeXb"
+}
+```
+
+### Sample Request
+
+```shell-session
+$ curl \
+    --request POST \
+    --data @payload.json \
+    https://localhost:4646/v1/acl/oidc/auth-url
+```
+
+### Sample Response
+
+```json
+```
+
+## Complete OIDC Authentication
+
+This endpoint creates an ACL Role. The request is always forwarded to the
+authoritative region.
+
+| Method | Path                         | Produces           |
+| ------ | ---------------------------- | ------------------ |
+| `POST` | `/v1/acl/oidc/complete-auth` | `application/json` |
+
+The table below shows this endpoint's support for
+[blocking queries](/api-docs#blocking-queries) and
+[required ACLs](/api-docs#acls).
+
+| Blocking Queries | ACL Required |
+| ---------------- | ------------ |
+| `NO`             | `none`       |
+
+### Parameters
+
+- `AuthMethodName` `(string: <required>)` - The name of the ACL authentication
+  method to use and will match that used within the call to generate the URL.
+
+- `RedirectURI` `(string: <required>)` - The URL that authorization should
+  redirect to.
+
+- `ClientNonce` `(string: <required>)` - A randomly generated string to prevent
+  replay attacks that will match that used within the call to generate the URL.
+
+- `State` `(string: <required>)` -
+
+- `Code` `(string: <required>)` -
+
+### Sample Payload
+
+```json
+{
+  "AuthMethodName": "auth0",
+  "RedirectURI": "http://127.0.0.1:4649/oidc/callback",
+  "ClientNonce": "fpSPuaodKevKfDU3IeXb",
+  "State": "",
+  "Code": ""
+}
+```
+
+### Sample Request
+
+```shell-session
+$ curl \
+    --request POST \
+    --data @payload.json \
+    https://localhost:4646/v1/acl/oidc/complete-auth
+```
+
+### Sample Response
+
+```json
+```

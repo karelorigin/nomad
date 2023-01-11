@@ -1136,6 +1136,16 @@ func TestACLAuthMethod_Canonicalize(t *testing.T) {
 	}
 }
 
+func TestACLAuthMethod_TokenLocalityIsGlobal(t *testing.T) {
+	ci.Parallel(t)
+
+	globalAuthMethod := &ACLAuthMethod{TokenLocality: "global"}
+	must.True(t, globalAuthMethod.TokenLocalityIsGlobal())
+
+	localAuthMethod := &ACLAuthMethod{TokenLocality: "local"}
+	must.False(t, localAuthMethod.TokenLocalityIsGlobal())
+}
+
 func TestACLBindingRule_Canonicalize(t *testing.T) {
 	ci.Parallel(t)
 
@@ -1374,4 +1384,42 @@ func Test_ACLBindingRuleRequest(t *testing.T) {
 
 	req := ACLBindingRuleRequest{}
 	require.True(t, req.IsRead())
+}
+
+func TestACLOIDCAuthURLRequest(t *testing.T) {
+	ci.Parallel(t)
+
+	req := &ACLOIDCAuthURLRequest{}
+	must.False(t, req.IsRead())
+}
+
+func TestACLOIDCAuthURLRequest_Validate(t *testing.T) {
+	ci.Parallel(t)
+
+	testRequest := &ACLOIDCAuthURLRequest{}
+	err := testRequest.Validate()
+	must.Error(t, err)
+	must.StrContains(t, err.Error(), "missing auth method name")
+	must.StrContains(t, err.Error(), "missing client nonce")
+	must.StrContains(t, err.Error(), "missing redirect URI")
+}
+
+func TestACLOIDCCompleteAuthRequest(t *testing.T) {
+	ci.Parallel(t)
+
+	req := &ACLOIDCCompleteAuthRequest{}
+	must.False(t, req.IsRead())
+}
+
+func TestACLOIDCCompleteAuthRequest_Validate(t *testing.T) {
+	ci.Parallel(t)
+
+	testRequest := &ACLOIDCCompleteAuthRequest{}
+	err := testRequest.Validate()
+	must.Error(t, err)
+	must.StrContains(t, err.Error(), "missing auth method name")
+	must.StrContains(t, err.Error(), "missing client nonce")
+	must.StrContains(t, err.Error(), "missing state")
+	must.StrContains(t, err.Error(), "missing code")
+	must.StrContains(t, err.Error(), "missing redirect URI")
 }

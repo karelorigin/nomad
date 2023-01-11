@@ -1,0 +1,46 @@
+---
+layout: docs
+page_title: 'Commands: login'
+description: Login to Nomad using an authentication method.
+---
+
+# Command: login
+
+The `login` command is used to login to an SSO provider and exchange the third
+party credentials for a newly minted Nomad ACL token.
+
+## Usage
+
+```plaintext
+nomad login [options]
+```
+
+The login command will exchange the provided third party credentials with the
+requested auth method for a newly minted Nomad ACL token.
+
+## General Options
+
+@include 'general_options.mdx'
+
+## Login Options
+
+- `-method`: The name of the ACL auth method to login to. If the cluster
+  administrator has configured a default, this flag is optional.
+
+- `-type`: Type of the auth method to login to. Defaults to "OIDC".
+
+- `-oidc-callback-addr`: The address to use for the local OIDC callback server.
+  This should be given in the form of <IP>:<PORT> and defaults to
+  "127.0.0.1:4649".
+
+- `-json`: Output the ACL token in JSON format.
+
+- `-t`: Format and display the ACL token using a Go template.
+
+## Examples
+
+Login using an OIDC provider:
+
+```shell-session
+$ nomad login -type=OIDC -method=auth0
+```

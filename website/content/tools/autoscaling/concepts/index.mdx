@@ -32,10 +32,10 @@ In closed-loop systems there are a few key components:
 * **Sensor** reads the system output and translates it to a value that can be
   used by the controller.
 
-[![Closed-loop controller](/img/autoscaling/control-loop.png)](/img/autoscaling/control-loop.png)
+[![Closed-loop controller](https://nomadproject.io/img/autoscaling/control-loop.png)](https://nomadproject.io/img/autoscaling/control-loop.png)
 
 The Nomad Autoscaler follows this same base architecture and offloads some of
-the components to [different types of plugins](/tools/autoscaling/concepts/plugins).
+the components to [different types of plugins](/nomad/tools/autoscaling/concepts/plugins).
 
 * The autoscaling **policy** is how users define their desired outcome and
   control the Nomad Autoscaler.
@@ -49,4 +49,4 @@ the components to [different types of plugins](/tools/autoscaling/concepts/plugi
   apply changes defined by the Autoscaler.
 * **APM plugins** read application performance metrics from external sources.
 
-[![Nomad Autoscaler architecture](/img/autoscaling/autoscaler-arch.png)](/img/autoscaling/autoscaler-arch.png)
+[![Nomad Autoscaler architecture](https://nomadproject.io/img/autoscaling/autoscaler-arch.png)](https://nomadproject.io/img/autoscaling/autoscaler-arch.png)
